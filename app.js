@@ -17,7 +17,9 @@ function parseNews(text) {
         let title = titleBody.substring(0, colonIndex).trim();
         let body = titleBody.substring(colonIndex + 1).trim();
         // Remove "As informações são do site X." / "As informações são da X."
-        body = body.replace(/As informações são (?:do|da|de)(?: site)? .*\.?$/i, "").trim();
+        body = body
+          .replace(/As informações são (?:do|da|de)(?: site)? .*\.?$/i, "")
+          .trim();
         if (body.length > 0) {
           body = body.charAt(0).toUpperCase() + body.slice(1);
         }
@@ -30,10 +32,13 @@ function parseNews(text) {
 
 async function authenticate(email, password) {
   try {
-    const response = await axios.post("http://localhost:3000/api/v1/sessions", {
-      email,
-      password,
-    });
+    const response = await axios.post(
+      "https://www.tabnews.com.br/api/v1/sessions",
+      {
+        email,
+        password,
+      },
+    );
     const sessionId = response.data.token;
     console.log("Login realizado com sucesso.");
     return sessionId;
@@ -46,7 +51,7 @@ async function authenticate(email, password) {
 async function publishNews(sessionId, newsItem) {
   try {
     const response = await axios.post(
-      "http://localhost:3000/api/v1/contents",
+      "https://www.tabnews.com.br/api/v1/contents",
       {
         title: newsItem.title,
         body: newsItem.body,
