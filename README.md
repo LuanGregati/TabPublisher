@@ -1,4 +1,4 @@
-# Publicar TabNews
+# TabPublisher
 
 Aplicação para automatizar a publicação de notícias no TabNews.
 
