@@ -47,3 +47,23 @@ node app.js < input.txt
 ```
 
 A aplicação irá autenticar, parsear as notícias, e publicá-las uma por vez com o intervalo configurado.
+
+## Interface Web Next.js
+
+O projeto também suporta uma interface web clássica com `pages/`, preparada para rodar localmente e para deploy no Vercel.
+
+```bash
+npm install
+npm run dev
+```
+
+Abra `http://localhost:3000`, informe seu email e senha do TabNews, cole as notícias e defina o intervalo. A interface mostra o progresso de cada publicação e permite interromper o processo.
+
+Para iniciar o servidor Next.js em produção:
+
+```bash
+npm run build
+npm run start:web
+```
+
+Atenção: no Vercel, o backend de publicação executa um item por vez via API, enquanto o intervalo e o controle de fluxo são gerenciados no navegador.
