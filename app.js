@@ -1,4 +1,3 @@
-const axios = require("axios");
 require("dotenv").config();
 
 function parseNews(text) {
@@ -32,44 +31,58 @@ function parseNews(text) {
 
 async function authenticate(email, password) {
   try {
-    const response = await axios.post(
-      "https://www.tabnews.com.br/api/v1/sessions",
-      {
-        email,
-        password,
+    const response = await fetch("https://www.tabnews.com.br/api/v1/sessions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
-    const sessionId = response.data.token;
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(
+        data?.message || JSON.stringify(data) || `HTTP ${response.status}`,
+      );
+    }
+
     console.log("Login realizado com sucesso.");
-    return sessionId;
+    return data.token;
   } catch (error) {
-    console.error("Erro no login:", error.response?.data || error.message);
+    console.error("Erro no login:", error.message || error);
     throw error;
   }
 }
 
 async function publishNews(sessionId, newsItem) {
   try {
-    const response = await axios.post(
-      "https://www.tabnews.com.br/api/v1/contents",
-      {
+    const response = await fetch("https://www.tabnews.com.br/api/v1/contents", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `session_id=${sessionId}`,
+      },
+      body: JSON.stringify({
         title: newsItem.title,
         body: newsItem.body,
         source_url: newsItem.url,
         status: "published",
-      },
-      {
-        headers: {
-          Cookie: `session_id=${sessionId}`,
-        },
-      },
-    );
+      }),
+    });
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(
+        data?.message || JSON.stringify(data) || `HTTP ${response.status}`,
+      );
+    }
+
     console.log(`Notícia publicada: ${newsItem.title}`);
-    return response.data;
+    return data;
   } catch (error) {
     console.error(
       `Erro ao publicar notícia "${newsItem.title}":`,
-      error.response?.data || error.message,
+      error.message || error,
     );
     throw error;
   }
