@@ -2,6 +2,8 @@
 
 Aplicação para automatizar a publicação de notícias no TabNews.
 
+https://tab-publisher.vercel.app/
+
 ## Instalação
 
 ```bash
