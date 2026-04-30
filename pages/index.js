@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from "react";
+import logger from "../lib/logger";
 
 const parseNews = (text) => {
   const news = [];
@@ -66,10 +67,25 @@ export default function Home() {
   const parsedItems = useMemo(() => parseNews(newsText), [newsText]);
 
   const addLog = (message) => {
-    setLogs((prev) => [
-      ...prev,
-      `${new Date().toLocaleTimeString()} - ${message}`,
-    ]);
+    setLogs((prev) => [...prev, logger.formatLogEntry(message)]);
+  };
+
+  const waitForInterval = async (seconds) => {
+    const targetTime = Date.now() + seconds * 1000;
+
+    while (!cancelRef.current) {
+      const remainingMs = targetTime - Date.now();
+      if (remainingMs <= 0) {
+        break;
+      }
+      setRemainingSeconds(Math.ceil(remainingMs / 1000));
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(1000, remainingMs)),
+      );
+    }
+
+    setRemainingSeconds(0);
+    return !cancelRef.current;
   };
 
   const handleLogin = async () => {
@@ -158,16 +174,10 @@ export default function Home() {
             `Aguardando ${interval} minuto(s) antes da próxima notícia...`,
           );
 
-          // Quebrar o intervalo em pedaços de 1 segundo para permitir cancelamento imediato
-          const totalSeconds = interval * 60;
-          for (let sec = totalSeconds; sec > 0; sec -= 1) {
-            if (cancelRef.current) {
-              break;
-            }
-            setRemainingSeconds(sec);
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+          const continuePublishing = await waitForInterval(interval * 60);
+          if (!continuePublishing) {
+            break;
           }
-          setRemainingSeconds(0);
         }
       }
 

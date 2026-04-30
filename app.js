@@ -1,6 +1,7 @@
 require("dotenv").config();
 
 const { parseNews, authenticate, publishNews } = require("./lib/tabnews");
+const { formatLogEntry, formatErrorEntry } = require("./lib/logger");
 
 async function main() {
   const email = process.env.TABNEWS_EMAIL;
@@ -10,7 +11,9 @@ async function main() {
 
   if (!email || !password) {
     console.error(
-      "Variáveis de ambiente TABNEWS_EMAIL e TABNEWS_PASSWORD são obrigatórias.",
+      formatErrorEntry(
+        "Variáveis de ambiente TABNEWS_EMAIL e TABNEWS_PASSWORD são obrigatórias.",
+      ),
     );
     process.exit(1);
   }
@@ -24,7 +27,7 @@ async function main() {
     try {
       const news = parseNews(input);
       if (news.length === 0) {
-        console.error("Nenhuma notícia encontrada no input.");
+        console.error(formatErrorEntry("Nenhuma notícia encontrada no input."));
         process.exit(1);
       }
 
@@ -32,10 +35,15 @@ async function main() {
 
       for (let i = 0; i < news.length; i++) {
         const item = news[i];
+        console.log(formatLogEntry(`Publicando: ${item.title}`));
         await publishNews(sessionId, item);
+        console.log(formatLogEntry("OK"));
+
         if (i < news.length - 1) {
           console.log(
-            `Aguardando ${intervalMinutes} minutos até a próxima publicação...`,
+            formatLogEntry(
+              `Aguardando ${intervalMinutes} minutos até a próxima publicação...`,
+            ),
           );
           await new Promise((resolve) =>
             setTimeout(resolve, intervalMinutes * 60 * 1000),
@@ -43,9 +51,9 @@ async function main() {
         }
       }
 
-      console.log("Todas as notícias foram publicadas.");
+      console.log(formatLogEntry("Todas as notícias foram publicadas."));
     } catch (error) {
-      console.error("Erro geral:", error.message);
+      console.error(formatErrorEntry(error.message || "Erro geral."));
       process.exit(1);
     }
   });
