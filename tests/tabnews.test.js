@@ -1,5 +1,5 @@
 const assert = require("assert");
-const { parseNews } = require("../lib/tabnews");
+const { parseNews } = require("../lib/newsParser");
 
 const sample = `https://example.com/one
 https://example.com/two

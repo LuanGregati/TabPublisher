@@ -1,70 +1,20 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import logger from "../lib/logger";
+import { parseNews } from "../lib/newsParser";
 
-const parseNews = (text) => {
-  const news = [];
-  const blocks = text.split(/\n\s*\n/).filter((block) => block.trim());
+const SESSION_STORAGE_KEY = "tabpublisher-session";
 
-  for (const block of blocks) {
-    const lines = block
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-
-    if (lines.length < 2) {
-      continue;
-    }
-
-    const sourceUrls = [];
-    let contentStartIndex = 0;
-
-    while (
-      contentStartIndex < lines.length &&
-      /^https?:\/\//i.test(lines[contentStartIndex])
-    ) {
-      sourceUrls.push(lines[contentStartIndex]);
-      contentStartIndex += 1;
-    }
-
-    const contentLines = lines.slice(contentStartIndex);
-
-    if (contentLines.length < 1) {
-      continue;
-    }
-
-    const contentText = contentLines.join(" ");
-    const colonIndex = contentText.indexOf(":");
-
-    let title = "";
-    let body = "";
-
-    if (colonIndex !== -1) {
-      title = contentText.substring(0, colonIndex).trim();
-      body = contentText.substring(colonIndex + 1).trim();
-    } else {
-      title = contentLines[0];
-      body = contentLines.slice(1).join(" ").trim();
-    }
-
-    body = body.replace(/\s*As informações são\b.*$/i, "").trim();
-
-    if (body.length > 0) {
-      body = body.charAt(0).toUpperCase() + body.slice(1);
-    }
-
-    if (sourceUrls.length > 1) {
-      const sourcesBlock = sourceUrls.map((source) => `- ${source}`).join("\n");
-      body = body
-        ? `${body}\n\nFontes:\n${sourcesBlock}`
-        : `Fontes:\n${sourcesBlock}`;
-    }
-
-    if (title) {
-      news.push({ url: sourceUrls[0] || "", title, body, sources: sourceUrls });
-    }
+const parseJsonResponse = async (response) => {
+  const text = await response.text();
+  if (!text) {
+    return {};
   }
 
-  return news;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
 };
 
 const formatTime = (seconds) => {
@@ -90,10 +40,32 @@ export default function Home() {
   const [remainingSeconds, setRemainingSeconds] = useState(0);
 
   const cancelRef = useRef(false);
+  const loginControllerRef = useRef(null);
+  const publishControllerRef = useRef(null);
 
   useEffect(() => {
     cancelRef.current = cancelRequested;
   }, [cancelRequested]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const savedSessionId = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (savedSessionId) {
+      setSessionId(savedSessionId);
+      setStatusMessage("Sessão restaurada.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (sessionId) {
+      window.sessionStorage.setItem(SESSION_STORAGE_KEY, sessionId);
+    } else {
+      window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+  }, [sessionId]);
 
   const parsedItems = useMemo(() => parseNews(newsText), [newsText]);
 
@@ -126,15 +98,23 @@ export default function Home() {
       return;
     }
 
+    if (loginControllerRef.current) {
+      loginControllerRef.current.abort();
+    }
+
+    const controller = new AbortController();
+    loginControllerRef.current = controller;
+
     try {
       setStatusMessage("Autenticando...");
       const response = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+        signal: controller.signal,
       });
 
-      const result = await response.json();
+      const result = await parseJsonResponse(response);
       if (!response.ok) {
         throw new Error(result.message || "Erro ao autenticar.");
       }
@@ -144,9 +124,18 @@ export default function Home() {
       setStatusMessage("Autenticado com sucesso.");
       addLog("Login realizado com sucesso.");
     } catch (error) {
-      setLoginError(error.message);
-      setStatusMessage("");
-      addLog(`Falha no login: ${error.message}`);
+      if (error.name === "AbortError") {
+        setLoginError("Autenticação cancelada.");
+        setStatusMessage("");
+      } else {
+        setLoginError(error.message);
+        setStatusMessage("");
+        addLog(`Falha no login: ${error.message}`);
+      }
+    } finally {
+      if (loginControllerRef.current === controller) {
+        loginControllerRef.current = null;
+      }
     }
   };
 
@@ -176,6 +165,9 @@ export default function Home() {
     setIsPublishing(true);
     setStatusMessage("Publicando notícias...");
 
+    const controller = new AbortController();
+    publishControllerRef.current = controller;
+
     try {
       for (let index = 0; index < parsed.length; index += 1) {
         if (cancelRef.current) {
@@ -190,9 +182,10 @@ export default function Home() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId, newsItem: item }),
+          signal: controller.signal,
         });
 
-        const result = await response.json();
+        const result = await parseJsonResponse(response);
         if (!response.ok) {
           throw new Error(result.message || "Erro ao publicar notícia.");
         }
@@ -219,9 +212,17 @@ export default function Home() {
         setStatusMessage("Processo interrompido.");
       }
     } catch (error) {
-      addLog(`Erro: ${error.message}`);
-      setStatusMessage(`Erro durante a publicação: ${error.message}`);
+      if (error.name === "AbortError") {
+        addLog("Publicação cancelada.");
+        setStatusMessage("Publicação cancelada.");
+      } else {
+        addLog(`Erro: ${error.message}`);
+        setStatusMessage(`Erro durante a publicação: ${error.message}`);
+      }
     } finally {
+      if (publishControllerRef.current === controller) {
+        publishControllerRef.current = null;
+      }
       setIsPublishing(false);
       setRemainingSeconds(0);
     }
@@ -231,7 +232,16 @@ export default function Home() {
     if (!isPublishing) return;
     cancelRef.current = true;
     setCancelRequested(true);
+    if (publishControllerRef.current) {
+      publishControllerRef.current.abort();
+    }
     setStatusMessage("Cancelando... Aguarde o fim da tarefa atual.");
+  };
+
+  const handleLogout = () => {
+    setSessionId("");
+    setStatusMessage("Sessão encerrada.");
+    setLoginError("");
   };
 
   return (
@@ -263,9 +273,16 @@ export default function Home() {
               disabled={isPublishing}
             />
           </label>
-          <button onClick={handleLogin} disabled={isPublishing}>
-            Autenticar
-          </button>
+          <div className="button-row">
+            <button onClick={handleLogin} disabled={isPublishing}>
+              Autenticar
+            </button>
+            {sessionId && (
+              <button onClick={handleLogout} disabled={isPublishing}>
+                Encerrar sessão
+              </button>
+            )}
+          </div>
           {loginError && <p className="error">{loginError}</p>}
           {sessionId && <p className="success">Sessão ativa</p>}
         </section>
@@ -284,6 +301,7 @@ export default function Home() {
             onChange={(e) => setNewsText(e.target.value)}
             disabled={isPublishing || !sessionId}
             placeholder="Cole aqui as notícias separadas por bloco..."
+            autoComplete="off"
           />
           <p>{parsedItems.length} notícias detectadas</p>
           <label>
@@ -294,6 +312,7 @@ export default function Home() {
               value={intervalMinutes}
               onChange={(e) => setIntervalMinutes(e.target.value)}
               disabled={isPublishing || !sessionId}
+              inputMode="numeric"
             />
           </label>
           <div className="button-row">

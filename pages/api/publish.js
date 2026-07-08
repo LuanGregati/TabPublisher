@@ -23,8 +23,10 @@ export default async function handler(req, res) {
     const published = await publishNews(sessionId, newsItem);
     return res.status(200).json({ published });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: error.message || "Erro ao publicar notícia." });
+    const message = error.message || "Erro ao publicar notícia.";
+    const statusCode =
+      message.includes("sessão") || message.includes("autentic") ? 401 : 500;
+
+    return res.status(statusCode).json({ message });
   }
 }

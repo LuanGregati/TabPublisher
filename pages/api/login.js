@@ -15,8 +15,12 @@ export default async function handler(req, res) {
     const sessionId = await authenticate(email, password);
     return res.status(200).json({ sessionId });
   } catch (error) {
-    return res
-      .status(401)
-      .json({ message: error.message || "Falha ao autenticar." });
+    const message = error.message || "Falha ao autenticar.";
+    const statusCode =
+      message.includes("HTTP 401") || message.includes("credenciais")
+        ? 401
+        : 500;
+
+    return res.status(statusCode).json({ message });
   }
 }
