@@ -3,33 +3,64 @@ import logger from "../lib/logger";
 
 const parseNews = (text) => {
   const news = [];
-  const blocks = text.split("\n\n").filter((block) => block.trim());
+  const blocks = text.split(/\n\s*\n/).filter((block) => block.trim());
 
   for (const block of blocks) {
     const lines = block
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l);
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
 
-    if (lines.length >= 2) {
-      const url = lines[0];
-      const titleBody = lines.slice(1).join(" ");
-      const colonIndex = titleBody.indexOf(":");
+    if (lines.length < 2) {
+      continue;
+    }
 
-      if (colonIndex !== -1) {
-        let title = titleBody.substring(0, colonIndex).trim();
-        let body = titleBody.substring(colonIndex + 1).trim();
+    const sourceUrls = [];
+    let contentStartIndex = 0;
 
-        body = body
-          .replace(/As informações são (?:do|da|de)(?: site)? .*\.?$/i, "")
-          .trim();
+    while (
+      contentStartIndex < lines.length &&
+      /^https?:\/\//i.test(lines[contentStartIndex])
+    ) {
+      sourceUrls.push(lines[contentStartIndex]);
+      contentStartIndex += 1;
+    }
 
-        if (body.length > 0) {
-          body = body.charAt(0).toUpperCase() + body.slice(1);
-        }
+    const contentLines = lines.slice(contentStartIndex);
 
-        news.push({ url, title, body });
-      }
+    if (contentLines.length < 1) {
+      continue;
+    }
+
+    const contentText = contentLines.join(" ");
+    const colonIndex = contentText.indexOf(":");
+
+    let title = "";
+    let body = "";
+
+    if (colonIndex !== -1) {
+      title = contentText.substring(0, colonIndex).trim();
+      body = contentText.substring(colonIndex + 1).trim();
+    } else {
+      title = contentLines[0];
+      body = contentLines.slice(1).join(" ").trim();
+    }
+
+    body = body.replace(/\s*As informações são\b.*$/i, "").trim();
+
+    if (body.length > 0) {
+      body = body.charAt(0).toUpperCase() + body.slice(1);
+    }
+
+    if (sourceUrls.length > 1) {
+      const sourcesBlock = sourceUrls.map((source) => `- ${source}`).join("\n");
+      body = body
+        ? `${body}\n\nFontes:\n${sourcesBlock}`
+        : `Fontes:\n${sourcesBlock}`;
+    }
+
+    if (title) {
+      news.push({ url: sourceUrls[0] || "", title, body, sources: sourceUrls });
     }
   }
 
