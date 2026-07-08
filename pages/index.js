@@ -261,7 +261,8 @@ export default function Home() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              disabled={isPublishing}
+              disabled={isPublishing || !!sessionId}
+              autoComplete="email"
             />
           </label>
           <label>
@@ -270,14 +271,16 @@ export default function Home() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              disabled={isPublishing}
+              disabled={isPublishing || !!sessionId}
+              autoComplete="current-password"
             />
           </label>
           <div className="button-row">
-            <button onClick={handleLogin} disabled={isPublishing}>
-              Autenticar
-            </button>
-            {sessionId && (
+            {!sessionId ? (
+              <button onClick={handleLogin} disabled={isPublishing}>
+                Autenticar
+              </button>
+            ) : (
               <button onClick={handleLogout} disabled={isPublishing}>
                 Encerrar sessão
               </button>
